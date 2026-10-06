@@ -33,33 +33,53 @@ SES_FROM_NAME = "Expense Report"
 
 
 # ============================================================
-# TIME ZONE
-# ============================================================
-
-TIME_ZONE = "Asia/Kolkata"
-
-
-# ============================================================
-# GET SEPTEMBER 2026 DATE RANGE
+# GET CURRENT MONTH DATE RANGE
 # ============================================================
 
 def get_current_month_date_range():
 
     # --------------------------------------------------------
-    # FIXED REPORT MONTH: SEPTEMBER 2026
+    # Get today's date from the computer.
     #
-    # Report period:
-    # 2026-09-01 -> 2026-09-30
+    # Example:
+    #
+    # If the script runs on 2026-10-06:
+    #
+    # start_date = 2026-10-01
+    # end_date   = 2026-10-06
+    #
+    # If it runs on 2026-11-10:
+    #
+    # start_date = 2026-11-01
+    # end_date   = 2026-11-10
     # --------------------------------------------------------
 
-    start_date = date(2026, 9, 1)
-    end_date = date(2026, 9, 30)
+    today = date.today()
+
+
+    # --------------------------------------------------------
+    # First day of current month
+    # --------------------------------------------------------
+
+    start_date = date(
+        today.year,
+        today.month,
+        1
+    )
+
+
+    # --------------------------------------------------------
+    # End date = today
+    # --------------------------------------------------------
+
+    end_date = today
+
 
     return (
         start_date.strftime("%Y-%m-%d"),
         end_date.strftime("%Y-%m-%d"),
-        start_date.year,
-        start_date.month
+        today.year,
+        today.month
     )
 
 
@@ -81,6 +101,7 @@ def get_zoho_access_token():
         "ZOHO_REFRESH_TOKEN"
     )
 
+
     if (
         not client_id
         or not client_secret
@@ -91,6 +112,7 @@ def get_zoho_access_token():
             "Missing Zoho OAuth environment variables. "
             "Please check your .env file."
         )
+
 
     params = {
 
@@ -107,6 +129,7 @@ def get_zoho_access_token():
             "refresh_token"
     }
 
+
     response = requests.post(
 
         ZOHO_ACCOUNTS_URL +
@@ -117,10 +140,12 @@ def get_zoho_access_token():
         timeout=60
     )
 
+
     print(
         "Zoho token response code:",
         response.status_code
     )
+
 
     if response.status_code != 200:
 
@@ -129,7 +154,9 @@ def get_zoho_access_token():
             response.text
         )
 
+
     data = response.json()
+
 
     if not data.get(
         "access_token"
@@ -140,11 +167,12 @@ def get_zoho_access_token():
             str(data)
         )
 
+
     return data["access_token"]
 
 
 # ============================================================
-# GET EXPENSES FOR SEPTEMBER 2026
+# GET EXPENSES FOR CURRENT MONTH
 # ============================================================
 
 def get_expenses_for_current_month(
@@ -157,6 +185,7 @@ def get_expenses_for_current_month(
 
     page = 1
     per_page = 200
+
 
     headers = {
 
@@ -188,10 +217,12 @@ def get_expenses_for_current_month(
             str(per_page)
         )
 
+
         print()
         print(
             "Fetching expense list..."
         )
+
 
         print(
             "Date range:",
@@ -200,10 +231,12 @@ def get_expenses_for_current_month(
             end_date
         )
 
+
         print(
             "Page:",
             page
         )
+
 
         response = requests.get(
 
@@ -214,10 +247,12 @@ def get_expenses_for_current_month(
             timeout=60
         )
 
+
         print(
             "Expenses API response:",
             response.status_code
         )
+
 
         if response.status_code != 200:
 
@@ -229,7 +264,9 @@ def get_expenses_for_current_month(
                 response.text
             )
 
+
         data = response.json()
+
 
         if data.get("code") != 0:
 
@@ -238,10 +275,12 @@ def get_expenses_for_current_month(
                 response.text
             )
 
+
         expenses = data.get(
             "expenses",
             []
         )
+
 
         if expenses:
 
@@ -249,9 +288,11 @@ def get_expenses_for_current_month(
                 expenses
             )
 
+
         page_context = data.get(
             "page_context"
         )
+
 
         if (
             not page_context
@@ -261,6 +302,7 @@ def get_expenses_for_current_month(
         ):
 
             break
+
 
         page += 1
 
@@ -278,14 +320,17 @@ def get_expenses_for_current_month(
 
     detailed_expenses = []
 
+
     print()
     print(
         "=" * 80
     )
 
+
     print(
         "FETCHING FULL EXPENSE DETAILS"
     )
+
 
     print(
         "=" * 80
@@ -302,6 +347,7 @@ def get_expenses_for_current_month(
             or expense.get("id")
         )
 
+
         print(
             f"[{index}/{len(all_expenses)}] "
             f"Expense ID: {expense_id}"
@@ -310,12 +356,16 @@ def get_expenses_for_current_month(
 
         # ----------------------------------------------------
         # IMPORTANT:
-        # Get rcy_total from ORIGINAL LIST RESPONSE
+        #
+        # Preserve rcy_total from original list response.
+        #
+        # This is the value we want to use for the report.
         # ----------------------------------------------------
 
         original_rcy_total = expense.get(
             "rcy_total"
         )
+
 
         print(
             "Original list rcy_total:",
@@ -324,7 +374,7 @@ def get_expenses_for_current_month(
 
 
         # ----------------------------------------------------
-        # If ID is missing, keep original record
+        # If ID is missing, keep original record.
         # ----------------------------------------------------
 
         if not expense_id:
@@ -334,9 +384,11 @@ def get_expenses_for_current_month(
                 "Using list response."
             )
 
+
             detailed_expenses.append(
                 expense
             )
+
 
             continue
 
@@ -349,6 +401,7 @@ def get_expenses_for_current_month(
                 str(expense_id)
             )
 
+
             detail_response = requests.get(
 
                 detail_url,
@@ -358,6 +411,7 @@ def get_expenses_for_current_month(
                 timeout=60
             )
 
+
             if detail_response.status_code != 200:
 
                 print(
@@ -366,9 +420,11 @@ def get_expenses_for_current_month(
                     f"HTTP {detail_response.status_code}"
                 )
 
+
                 detailed_expenses.append(
                     expense
                 )
+
 
                 continue
 
@@ -377,6 +433,7 @@ def get_expenses_for_current_month(
                 detail_response.json()
             )
 
+
             if detail_data.get("code") != 0:
 
                 print(
@@ -384,15 +441,17 @@ def get_expenses_for_current_month(
                     f"an error for {expense_id}"
                 )
 
+
                 detailed_expenses.append(
                     expense
                 )
+
 
                 continue
 
 
             # ------------------------------------------------
-            # Get detail expense object
+            # Get detail expense object.
             # ------------------------------------------------
 
             detail_expense = (
@@ -415,11 +474,9 @@ def get_expenses_for_current_month(
 
 
             # ------------------------------------------------
-            # MERGE
+            # Merge list + detail data.
             #
-            # Preserve ORIGINAL LIST rcy_total separately.
-            # This prevents the detail response from
-            # accidentally replacing the value.
+            # Preserve original rcy_total separately.
             # ------------------------------------------------
 
             merged_expense = {
@@ -445,6 +502,7 @@ def get_expenses_for_current_month(
                 f"for {expense_id}: {error}"
             )
 
+
             detailed_expenses.append(
                 expense
             )
@@ -454,10 +512,12 @@ def get_expenses_for_current_month(
         "=" * 80
     )
 
+
     print(
         "Expenses processed with details:",
         len(detailed_expenses)
     )
+
 
     print(
         "=" * 80
@@ -473,18 +533,10 @@ def get_expenses_for_current_month(
 
 def parse_amount(value):
 
-    """
-    Safely convert Zoho amount values to Decimal.
-
-    Handles:
-        100
-        100.50
-        "100"
-        "1,000.50"
-    """
-
     if value is None:
+
         return None
+
 
     try:
 
@@ -494,12 +546,16 @@ def parse_amount(value):
             .strip()
         )
 
+
         if cleaned == "":
+
             return None
+
 
         return Decimal(
             cleaned
         )
+
 
     except Exception:
 
@@ -512,11 +568,11 @@ def parse_amount(value):
 # PRIMARY FIELD:
 #     rcy_total
 #
-# IMPORTANT:
-#     We DO NOT use total
-#     We DO NOT use amount
+# DO NOT USE:
+#     total
+#     amount
 #
-# rcy_total is the reporting-currency value.
+# rcy_total is the reporting-currency amount.
 # ============================================================
 
 def get_amount(expense):
@@ -524,7 +580,7 @@ def get_amount(expense):
     # --------------------------------------------------------
     # FIRST PRIORITY:
     #
-    # rcy_total from the ORIGINAL LIST RESPONSE
+    # rcy_total from ORIGINAL list response.
     # --------------------------------------------------------
 
     list_rcy_total = parse_amount(
@@ -532,6 +588,7 @@ def get_amount(expense):
             "_list_rcy_total"
         )
     )
+
 
     if list_rcy_total is not None:
 
@@ -541,7 +598,7 @@ def get_amount(expense):
     # --------------------------------------------------------
     # SECOND PRIORITY:
     #
-    # rcy_total from merged/detail response
+    # rcy_total from merged/detail response.
     # --------------------------------------------------------
 
     rcy_total = parse_amount(
@@ -550,15 +607,20 @@ def get_amount(expense):
         )
     )
 
+
     if rcy_total is not None:
 
         return rcy_total
 
 
     # --------------------------------------------------------
-    # NO FALLBACK TO total OR amount
+    # IMPORTANT:
     #
-    # This is intentional.
+    # Do NOT use:
+    #     total
+    #     amount
+    #
+    # as fallback.
     # --------------------------------------------------------
 
     return Decimal("0")
@@ -573,6 +635,7 @@ def get_gst(expense):
     custom_fields = expense.get(
         "custom_fields"
     )
+
 
     if (
         custom_fields
@@ -593,6 +656,7 @@ def get_gst(expense):
                     "value"
                 )
 
+
                 try:
 
                     return Decimal(
@@ -600,6 +664,7 @@ def get_gst(expense):
                             value or 0
                         )
                     )
+
 
                 except Exception:
 
@@ -618,6 +683,7 @@ def get_tds(expense):
     custom_fields = expense.get(
         "custom_fields"
     )
+
 
     if (
         custom_fields
@@ -638,6 +704,7 @@ def get_tds(expense):
                     "value"
                 )
 
+
                 try:
 
                     return Decimal(
@@ -645,6 +712,7 @@ def get_tds(expense):
                             value or 0
                         )
                     )
+
 
                 except Exception:
 
@@ -672,9 +740,11 @@ def calculate_totals(
         "=" * 100
     )
 
+
     print(
         "EXPENSE-WISE GST / TDS / RCY TOTAL"
     )
+
 
     print(
         "=" * 100
@@ -689,6 +759,7 @@ def calculate_totals(
             or "UNKNOWN"
         )
 
+
         description = (
             expense.get("description")
             or expense.get("merchant_name")
@@ -700,9 +771,11 @@ def calculate_totals(
             expense
         )
 
+
         gst = get_gst(
             expense
         )
+
 
         tds = get_tds(
             expense
@@ -728,20 +801,24 @@ def calculate_totals(
         "=" * 100
     )
 
+
     print(
         "TOTAL EXPENSE AMOUNT (rcy_total):",
         total_amount
     )
+
 
     print(
         "TOTAL GST:",
         total_gst
     )
 
+
     print(
         "TOTAL TDS:",
         total_tds
     )
+
 
     print(
         "=" * 100
@@ -768,6 +845,7 @@ def format_currency(
             amount or 0
         )
     )
+
 
     return (
         "₹" +
@@ -1050,13 +1128,16 @@ def send_email_via_ses(
         "AWS_ACCESS_KEY_ID"
     )
 
+
     aws_secret_key = os.getenv(
         "AWS_SECRET_ACCESS_KEY"
     )
 
+
     aws_region = os.getenv(
         "AWS_REGION"
     )
+
 
     email_to = os.getenv(
         "EMAIL_TO"
@@ -1124,12 +1205,14 @@ def send_email_via_ses(
             ">"
         ),
 
+
         Destination={
 
             "ToAddresses":
                 to_addresses
 
         },
+
 
         Message={
 
@@ -1143,6 +1226,7 @@ def send_email_via_ses(
 
             },
 
+
             "Body": {
 
                 "Text": {
@@ -1154,6 +1238,7 @@ def send_email_via_ses(
                         "UTF-8"
 
                 },
+
 
                 "Html": {
 
@@ -1177,6 +1262,7 @@ def send_email_via_ses(
         "SES message sent."
     )
 
+
     print(
         "Message ID:",
         response.get(
@@ -1196,9 +1282,11 @@ def main():
         "=" * 100
     )
 
+
     print(
         "MONTHLY EXPENSE REPORT"
     )
+
 
     print(
         "=" * 100
@@ -1206,7 +1294,7 @@ def main():
 
 
     # --------------------------------------------------------
-    # GET SEPTEMBER 2026
+    # GET CURRENT MONTH DATE RANGE
     # --------------------------------------------------------
 
     (
@@ -1232,12 +1320,14 @@ def main():
         month_name
     )
 
+
     print(
         "REPORT PERIOD:",
         start_date,
         "to",
         end_date
     )
+
 
     print()
 
@@ -1252,7 +1342,7 @@ def main():
 
 
     # --------------------------------------------------------
-    # GET SEPTEMBER 2026 EXPENSES
+    # GET CURRENT MONTH EXPENSES
     # --------------------------------------------------------
 
     expenses = (
@@ -1340,9 +1430,11 @@ def main():
         "=" * 100
     )
 
+
     print(
         "MONTHLY REPORT COMPLETED SUCCESSFULLY"
     )
+
 
     print(
         "=" * 100
@@ -1354,12 +1446,14 @@ def main():
         month_name
     )
 
+
     print(
         "Period:",
         start_date,
         "to",
         end_date
     )
+
 
     print(
         "Total Expense Amount (rcy_total):",
@@ -1368,6 +1462,7 @@ def main():
         )
     )
 
+
     print(
         "Total GST:",
         format_currency(
@@ -1375,12 +1470,14 @@ def main():
         )
     )
 
+
     print(
         "Total TDS:",
         format_currency(
             total_tds
         )
     )
+
 
     print(
         "=" * 100
@@ -1404,20 +1501,25 @@ if __name__ == "__main__":
             "=" * 100
         )
 
+
         print(
             "MONTHLY REPORT FAILED"
         )
 
+
         print(
             "=" * 100
         )
+
 
         print(
             str(error)
         )
 
+
         print(
             "=" * 100
         )
+
 
         raise
