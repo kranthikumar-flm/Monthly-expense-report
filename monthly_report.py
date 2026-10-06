@@ -40,65 +40,26 @@ TIME_ZONE = "Asia/Kolkata"
 
 
 # ============================================================
-# GET CURRENT MONTH DATE RANGE
-#
-# Example:
-#
-# September 30:
-#     2026-09-01 → 2026-09-30
-#
-# October 5:
-#     2026-10-01 → 2026-10-05
-#
-# The script always uses the month in which it is RUN.
+# GET SEPTEMBER 2026 DATE RANGE
 # ============================================================
 
 def get_current_month_date_range():
 
     # --------------------------------------------------------
-    # Get current date in the system.
+    # FIXED REPORT MONTH: SEPTEMBER 2026
     #
-    # Since your server/EC2 is expected to run in the
-    # India timezone, we explicitly use Asia/Kolkata.
+    # Report period:
+    # 2026-09-01 -> 2026-09-30
     # --------------------------------------------------------
 
-    try:
-
-        from zoneinfo import ZoneInfo
-
-        today = datetime.now(
-            ZoneInfo(TIME_ZONE)
-        ).date()
-
-    except Exception:
-
-        # Fallback if zoneinfo is unavailable
-        today = date.today()
-
-    # --------------------------------------------------------
-    # First day of current month
-    # --------------------------------------------------------
-
-    start_date = date(
-        today.year,
-        today.month,
-        1
-    )
-
-    # --------------------------------------------------------
-    # Today is the end date.
-    #
-    # This means the report contains the current month's
-    # expenses recorded up to the day the script is run.
-    # --------------------------------------------------------
-
-    end_date = today
+    start_date = date(2026, 9, 1)
+    end_date = date(2026, 9, 30)
 
     return (
         start_date.strftime("%Y-%m-%d"),
         end_date.strftime("%Y-%m-%d"),
-        today.year,
-        today.month
+        start_date.year,
+        start_date.month
     )
 
 
@@ -183,7 +144,7 @@ def get_zoho_access_token():
 
 
 # ============================================================
-# GET EXPENSES FOR CURRENT MONTH
+# GET EXPENSES FOR SEPTEMBER 2026
 # ============================================================
 
 def get_expenses_for_current_month(
@@ -206,6 +167,7 @@ def get_expenses_for_current_month(
         "X-com-zoho-expense-organizationid":
             ZOHO_ORGANIZATION_ID
     }
+
 
     # ========================================================
     # GET EXPENSE LIST
@@ -302,16 +264,16 @@ def get_expenses_for_current_month(
 
         page += 1
 
+
     print()
     print(
         "Total expenses found:",
         len(all_expenses)
     )
 
+
     # ========================================================
     # FETCH FULL DETAILS FOR EVERY EXPENSE
-    #
-    # This follows your working daily report.
     # ========================================================
 
     detailed_expenses = []
@@ -329,6 +291,7 @@ def get_expenses_for_current_month(
         "=" * 80
     )
 
+
     for index, expense in enumerate(
         all_expenses,
         start=1
@@ -343,6 +306,22 @@ def get_expenses_for_current_month(
             f"[{index}/{len(all_expenses)}] "
             f"Expense ID: {expense_id}"
         )
+
+
+        # ----------------------------------------------------
+        # IMPORTANT:
+        # Get rcy_total from ORIGINAL LIST RESPONSE
+        # ----------------------------------------------------
+
+        original_rcy_total = expense.get(
+            "rcy_total"
+        )
+
+        print(
+            "Original list rcy_total:",
+            original_rcy_total
+        )
+
 
         # ----------------------------------------------------
         # If ID is missing, keep original record
@@ -360,6 +339,7 @@ def get_expenses_for_current_month(
             )
 
             continue
+
 
         try:
 
@@ -392,6 +372,7 @@ def get_expenses_for_current_month(
 
                 continue
 
+
             detail_data = (
                 detail_response.json()
             )
@@ -409,8 +390,9 @@ def get_expenses_for_current_month(
 
                 continue
 
+
             # ------------------------------------------------
-            # Same structure as daily report
+            # Get detail expense object
             # ------------------------------------------------
 
             detail_expense = (
@@ -418,21 +400,43 @@ def get_expenses_for_current_month(
                 or detail_data
             )
 
+
+            detail_rcy_total = (
+                detail_expense.get(
+                    "rcy_total"
+                )
+            )
+
+
+            print(
+                "Detail rcy_total:",
+                detail_rcy_total
+            )
+
+
             # ------------------------------------------------
-            # Merge original list record with full details
+            # MERGE
+            #
+            # Preserve ORIGINAL LIST rcy_total separately.
+            # This prevents the detail response from
+            # accidentally replacing the value.
             # ------------------------------------------------
 
             merged_expense = {
 
                 **expense,
 
-                **detail_expense
+                **detail_expense,
 
+                "_list_rcy_total":
+                    original_rcy_total
             }
+
 
             detailed_expenses.append(
                 merged_expense
             )
+
 
         except Exception as error:
 
@@ -444,6 +448,7 @@ def get_expenses_for_current_month(
             detailed_expenses.append(
                 expense
             )
+
 
     print(
         "=" * 80
@@ -458,67 +463,109 @@ def get_expenses_for_current_month(
         "=" * 80
     )
 
+
     return detailed_expenses
 
 
 # ============================================================
-# GET AMOUNT
+# PARSE AMOUNT
+# ============================================================
+
+def parse_amount(value):
+
+    """
+    Safely convert Zoho amount values to Decimal.
+
+    Handles:
+        100
+        100.50
+        "100"
+        "1,000.50"
+    """
+
+    if value is None:
+        return None
+
+    try:
+
+        cleaned = (
+            str(value)
+            .replace(",", "")
+            .strip()
+        )
+
+        if cleaned == "":
+            return None
+
+        return Decimal(
+            cleaned
+        )
+
+    except Exception:
+
+        return None
+
+
+# ============================================================
+# GET EXPENSE AMOUNT
 #
-# Same approach as daily report:
+# PRIMARY FIELD:
+#     rcy_total
 #
-# total → amount
+# IMPORTANT:
+#     We DO NOT use total
+#     We DO NOT use amount
+#
+# rcy_total is the reporting-currency value.
 # ============================================================
 
 def get_amount(expense):
 
-    if (
-        expense.get("total")
-        is not None
-    ):
+    # --------------------------------------------------------
+    # FIRST PRIORITY:
+    #
+    # rcy_total from the ORIGINAL LIST RESPONSE
+    # --------------------------------------------------------
 
-        try:
+    list_rcy_total = parse_amount(
+        expense.get(
+            "_list_rcy_total"
+        )
+    )
 
-            return Decimal(
-                str(
-                    expense.get("total")
-                )
-            )
+    if list_rcy_total is not None:
 
-        except Exception:
-            pass
+        return list_rcy_total
 
-    if (
-        expense.get("amount")
-        is not None
-    ):
 
-        try:
+    # --------------------------------------------------------
+    # SECOND PRIORITY:
+    #
+    # rcy_total from merged/detail response
+    # --------------------------------------------------------
 
-            return Decimal(
-                str(
-                    expense.get("amount")
-                )
-            )
+    rcy_total = parse_amount(
+        expense.get(
+            "rcy_total"
+        )
+    )
 
-        except Exception:
-            pass
+    if rcy_total is not None:
+
+        return rcy_total
+
+
+    # --------------------------------------------------------
+    # NO FALLBACK TO total OR amount
+    #
+    # This is intentional.
+    # --------------------------------------------------------
 
     return Decimal("0")
 
 
 # ============================================================
 # GET GST
-#
-# SOURCE:
-#
-# custom_fields
-#      ↓
-# api_name == "cf_gst"
-#      ↓
-# field.value
-#
-# This is the same logic used in the working
-# daily expense report.
 # ============================================================
 
 def get_gst(expense):
@@ -558,21 +605,12 @@ def get_gst(expense):
 
                     return Decimal("0")
 
+
     return Decimal("0")
 
 
 # ============================================================
 # GET TDS
-#
-# SOURCE:
-#
-# custom_fields
-#      ↓
-# api_name == "cf_tds"
-#      ↓
-# field.value
-#
-# Same logic used in daily report.
 # ============================================================
 
 def get_tds(expense):
@@ -612,6 +650,7 @@ def get_tds(expense):
 
                     return Decimal("0")
 
+
     return Decimal("0")
 
 
@@ -627,18 +666,20 @@ def calculate_totals(
     total_gst = Decimal("0")
     total_tds = Decimal("0")
 
+
     print()
     print(
         "=" * 100
     )
 
     print(
-        "EXPENSE-WISE GST / TDS"
+        "EXPENSE-WISE GST / TDS / RCY TOTAL"
     )
 
     print(
         "=" * 100
     )
+
 
     for expense in expenses:
 
@@ -654,6 +695,7 @@ def calculate_totals(
             or "Expense"
         )
 
+
         amount = get_amount(
             expense
         )
@@ -666,17 +708,20 @@ def calculate_totals(
             expense
         )
 
+
         print(
             f"ID: {expense_id} | "
             f"Expense: {description} | "
-            f"Amount: {amount} | "
+            f"rcy_total: {amount} | "
             f"GST: {gst} | "
             f"TDS: {tds}"
         )
 
+
         total_amount += amount
         total_gst += gst
         total_tds += tds
+
 
     print()
     print(
@@ -684,7 +729,7 @@ def calculate_totals(
     )
 
     print(
-        "TOTAL EXPENSE AMOUNT:",
+        "TOTAL EXPENSE AMOUNT (rcy_total):",
         total_amount
     )
 
@@ -701,6 +746,7 @@ def calculate_totals(
     print(
         "=" * 100
     )
+
 
     return (
         total_amount,
@@ -751,6 +797,7 @@ def build_html_email(
         "%B %Y"
     )
 
+
     return f"""
 <!DOCTYPE html>
 
@@ -784,6 +831,7 @@ color:#222;
 Monthly Expense Report - {month_name}
 
 </h2>
+
 
 <div style="
 font-size:13px;
@@ -820,6 +868,7 @@ Total Expense Amount
 
 </div>
 
+
 <div style="
 font-size:28px;
 font-weight:bold;
@@ -847,6 +896,7 @@ color:#666;
 Total GST
 
 </div>
+
 
 <div style="
 font-size:28px;
@@ -876,6 +926,7 @@ Total TDS
 
 </div>
 
+
 <div style="
 font-size:28px;
 font-weight:bold;
@@ -903,6 +954,7 @@ color:#777;
 This is an automatically generated monthly expense report.
 
 </div>
+
 
 </div>
 
@@ -934,13 +986,16 @@ def build_plain_text_email(
         "%B %Y"
     )
 
+
     body = ""
+
 
     body += (
         "Monthly Expense Report - "
         + month_name
         + "\n\n"
     )
+
 
     body += (
         "Report Period: "
@@ -950,6 +1005,7 @@ def build_plain_text_email(
         + "\n\n"
     )
 
+
     body += (
         "Total Expense Amount: "
         + format_currency(
@@ -957,6 +1013,7 @@ def build_plain_text_email(
         )
         + "\n"
     )
+
 
     body += (
         "Total GST: "
@@ -966,6 +1023,7 @@ def build_plain_text_email(
         + "\n"
     )
 
+
     body += (
         "Total TDS: "
         + format_currency(
@@ -973,6 +1031,7 @@ def build_plain_text_email(
         )
         + "\n"
     )
+
 
     return body
 
@@ -1003,6 +1062,7 @@ def send_email_via_ses(
         "EMAIL_TO"
     )
 
+
     if (
         not aws_access_key
         or not aws_secret_key
@@ -1014,11 +1074,13 @@ def send_email_via_ses(
             "Please check your .env file."
         )
 
+
     if not email_to:
 
         raise Exception(
             "EMAIL_TO is missing in the environment."
         )
+
 
     to_addresses = [
 
@@ -1031,11 +1093,13 @@ def send_email_via_ses(
 
     ]
 
+
     if not to_addresses:
 
         raise Exception(
             "No valid recipient email addresses found."
         )
+
 
     ses_client = boto3.client(
 
@@ -1049,6 +1113,7 @@ def send_email_via_ses(
         aws_secret_access_key=
             aws_secret_key
     )
+
 
     response = ses_client.send_email(
 
@@ -1106,6 +1171,7 @@ def send_email_via_ses(
 
     )
 
+
     print()
     print(
         "SES message sent."
@@ -1138,8 +1204,9 @@ def main():
         "=" * 100
     )
 
+
     # --------------------------------------------------------
-    # GET CURRENT MONTH
+    # GET SEPTEMBER 2026
     # --------------------------------------------------------
 
     (
@@ -1149,6 +1216,7 @@ def main():
         month
     ) = get_current_month_date_range()
 
+
     month_name = datetime(
         year,
         month,
@@ -1157,9 +1225,10 @@ def main():
         "%B %Y"
     )
 
+
     print()
     print(
-        "CURRENT MONTH:",
+        "REPORT MONTH:",
         month_name
     )
 
@@ -1172,6 +1241,7 @@ def main():
 
     print()
 
+
     # --------------------------------------------------------
     # GET ZOHO ACCESS TOKEN
     # --------------------------------------------------------
@@ -1180,8 +1250,9 @@ def main():
         get_zoho_access_token()
     )
 
+
     # --------------------------------------------------------
-    # GET CURRENT MONTH EXPENSES
+    # GET SEPTEMBER 2026 EXPENSES
     # --------------------------------------------------------
 
     expenses = (
@@ -1191,6 +1262,7 @@ def main():
             end_date
         )
     )
+
 
     # --------------------------------------------------------
     # CALCULATE TOTALS
@@ -1203,6 +1275,7 @@ def main():
     ) = calculate_totals(
         expenses
     )
+
 
     # --------------------------------------------------------
     # BUILD EMAIL
@@ -1220,6 +1293,7 @@ def main():
         )
     )
 
+
     plain_text_body = (
         build_plain_text_email(
             year,
@@ -1232,6 +1306,7 @@ def main():
         )
     )
 
+
     # --------------------------------------------------------
     # EMAIL SUBJECT
     # --------------------------------------------------------
@@ -1240,6 +1315,7 @@ def main():
         "Monthly Expense Report - "
         + month_name
     )
+
 
     # --------------------------------------------------------
     # SEND EMAIL
@@ -1253,6 +1329,7 @@ def main():
 
         html_body
     )
+
 
     # --------------------------------------------------------
     # FINAL OUTPUT
@@ -1271,6 +1348,7 @@ def main():
         "=" * 100
     )
 
+
     print(
         "Month:",
         month_name
@@ -1284,7 +1362,7 @@ def main():
     )
 
     print(
-        "Total Expense Amount:",
+        "Total Expense Amount (rcy_total):",
         format_currency(
             total_amount
         )
